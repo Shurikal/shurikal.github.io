@@ -1,0 +1,412 @@
+---
+layout: post
+title:  "Intel 8080 Emulator Part 2: How to write a C module for Python"
+date:   2023-02-05 11:00:00 +0100
+categories: project
+permalink: /projects/i8080_part_2/
+---
+
+# Part 2: How to write a C module for Python
+
+In the [previous post][i8080_part_1], we set up the project and wrote a very simple C module.
+
+Now we will add some basic functionality to the module.
+
+## Adding methods to the module
+
+To add methods to the module, we need to add a `PyMethodDef` struct to the `PyModuleDef` struct.
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+
+// PyMethodDef struct
+// https://docs.python.org/3/c-api/structures.html?highlight=pymethoddef#c.PyMethodDef
+static PyMethodDef i8080_module_methods[] = {
+    {NULL,              NULL}           /* sentinel */
+};
+...
+// https://docs.python.org/3/c-api/module.html#c.PyModuleDef
+static struct PyModuleDef i8080module = {
+    PyModuleDef_HEAD_INIT,  //m_base
+    "intel_8080",           //m_name
+    module_doc,             //m_doc
+    0,                      //m_size
+    i8080_module_methods,   //m_methods
+    NULL,                   //m_slots
+    NULL,                   //m_traverse
+    NULL,                   //m_clear
+    NULL                    //m_free
+};
+
+{% endhighlight %}
+
+An entry in the `PyMethodDef` struct contains the following fields:
+
+* `ml_name`: The name of the method (in Python)
+* `ml_meth`: The function pointer to the method (in C)
+* `ml_flags`: Flags for the method.
+* `ml_doc`: The documentation string for the method.
+
+The last entry in the `PyMethodDef` struct must be a sentinel, which is a `{NULL, NULL}` entry.
+
+Now we can add a method to the module.
+The documentation how to implement functions can be found [here](https://docs.python.org/3/c-api/structures.html#implementing-functions-and-methods).
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+// PyMethodDef struct
+// https://docs.python.org/3/c-api/structures.html?highlight=pymethoddef#c.PyMethodDef
+static PyMethodDef i8080_module_methods[] = {
+    {"add", (PyCFunction)i8080_m_add, METH_VARARGS, "Add two numbers."},
+    {NULL,              NULL}           /* sentinel */
+};
+...
+{% endhighlight %}
+
+In this example, we added a method called `add` to the module.
+The method should take two arguments and return the sum of the two arguments.
+
+To implement the method, we need to write a function with the following signature:
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+static PyObject *
+i8080_m_add(PyObject *self, PyObject *args)
+{
+    uint64_t val_1, val_2;
+
+    // https://docs.python.org/3/c-api/arg.html
+    if (!PyArg_ParseTuple(args, "LL", &val_1, &val_2)){
+        PyErr_SetString(PyExc_Exception, "Parse error\n");
+        return NULL;
+    }
+    uint64_t result = val_1 + val_2;
+    return Py_BuildValue("L", result);
+}
+...
+{% endhighlight %}
+
+The function takes two arguments: `self` and `args`.
+`self` is a pointer to the module object.
+`args` is a pointer to a `PyObject` struct, which contains the arguments passed to the method.
+
+The function returns a `PyObject` struct, which is the return value of the method.
+
+The `PyArg_ParseTuple` function parses the arguments passed to the method.
+
+The `i8080_m_add` function needs to be defined before the `PyMethodDef` struct.
+Otherwise, the compiler will complain.
+
+Let's build the module and try it out:
+
+{% highlight bash %}
+python -m pip install .
+
+python
+>>> import _i8080
+>>> _i8080.add(1, 2)
+3
+
+{% endhighlight %}
+
+## Adding types to the module (multi-phase initialization)
+
+There are two ways how to create modules in Python:
+
+* Single-phase initialization
+* Multi-phase initialization
+
+For simple modules, single-phase initialization is sufficient.
+In this project, we will use multi-phase initialization.
+More information about the differences between the two initialization methods can be found [here](https://docs.python.org/3/c-api/module.html#multi-phase-initialization).
+[PEP 489](https://peps.python.org/pep-0489/#legacy-init) also contains a good explanation of the differences between the two initialization methods.
+
+Because we use multi-phase initialization, we use the `PyModuleDef_Slot` struct.
+The `PyModuleDef_Slot` struct contains the following fields:
+
+* `slot`: The slot type.
+* `*value`: The function pointer.
+
+The `slot` field can be one of the following values:
+
+* `Py_mod_create`: The module creation function.
+* `Py_mod_exec`: The module execution function.
+
+The `*value` field is a function pointer to the function that should be called when the slot is executed.
+
+In this project, we only need the `Py_mod_exec` slot type.
+
+The `Py_mod_exec` slot type is used to initialize the module.
+It is used to add classes and constants to the module.
+
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+// https://docs.python.org/3/c-api/module.html#c.PyModuleDef_Slot
+static struct PyModuleDef_Slot i8080_module_slots[] = {
+    {Py_mod_exec, i8080_exec},
+    {0, NULL},
+};
+...
+{% endhighlight %}
+
+The `i8080_exec` function is the function that is called when the module is initialized.
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+// Slot initialization
+static int64_t
+i8080_exec(PyObject *m)
+{
+    #ifdef DEBUG
+    printf("i8080_exec\n");
+    #endif
+
+    return 0;
+ fail:
+    Py_XDECREF(m);
+    return -1;
+}
+...
+{% endhighlight %}
+
+
+The `fail` label is used if during type initialization an error occurs.
+The `Py_XDECREF` function decrements the reference count of the module object.
+
+
+We also have to adjust the `PyModuleDef` struct:
+
+{% highlight c %}
+// src/i8080/_i8080_module.c
+...
+static struct PyModuleDef i8080module = {
+    PyModuleDef_HEAD_INIT,  //m_base
+    "intel_8080",           //m_name
+    module_doc,             //m_doc
+    0,                      //m_size
+    i8080_module_methods,   //m_methods
+    i8080_module_slots,     //m_slots
+    NULL,                   //m_traverse
+    NULL,                   //m_clear
+    NULL                    //m_free
+};
+...
+{% endhighlight %}
+
+Now we can compile the module and try it out:
+
+{% highlight bash %}
+python -m pip install .
+
+python
+>>> import _i8080
+i8080_exec
+{% endhighlight %}
+
+
+Before we can add a new type to the module, we need to define the type.
+For this, we create three new files:
+
+* `src/i8080/_i8080_object.c`: The type definition.
+* `src/i8080/_i8080_object.h`: The type declaration.
+* `src/i8080/_i8080_constants.h`: Constants used throughout the project.
+
+
+In `src/i8080/_i8080_constants.h` we will define constants which are used throughout the project:
+
+{% highlight c %}
+// src/i8080/_i8080_constants.h
+#pragma once
+
+#define MEMORY_SIZE (0x10000)
+
+{% endhighlight %}
+
+The `MEMORY_SIZE` constant defines the size of the memory of the Intel 8080 CPU.
+
+In `src/i8080/_i8080_object.h` we will define how the type looks like:
+
+{% highlight c %}
+// src/i8080/_i8080_object.h
+#pragma once
+#include "Python.h"
+#include <stdint.h>
+#include <string.h>
+
+typedef struct ConditionCodes {
+	uint8_t		z:1;
+	uint8_t		s:1;
+	uint8_t		p:1;
+	uint8_t		cy:1;
+	uint8_t		ac:1;
+    // Custom added flags
+    uint8_t     halt:1;
+    uint8_t     int_enable:1;
+	uint8_t		pad:1;
+} ConditionCodes;
+
+typedef struct {
+    PyObject_HEAD
+    uint8_t     A;
+    uint8_t     B;
+    uint8_t     C;
+    uint8_t     D;
+    uint8_t     E;
+    uint8_t     H;
+    uint8_t     L;
+    uint16_t    SP;
+    uint16_t    PC;
+    struct ConditionCodes  CC;
+    uint8_t    IO[256];   
+    uint8_t     *memory;        
+    PyObject    *x_attr;        /* Attributes dictionary */
+} i8080oObject;
+
+// Definition of the i8080oObject type
+PyTypeObject i8080o_Type;
+
+{% endhighlight %}
+
+The `i8080oObject` struct contains the following fields:
+
+* `PyObject_HEAD`: The Python object header.
+* `A`: The accumulator register.
+* `B`: The B register.
+* `C`: The C register.
+* `D`: The D register.
+* `E`: The E register.
+* `H`: The H register.
+* `L`: The L register.
+* `SP`: The stack pointer.
+* `PC`: The program counter.
+* `CC`: The condition codes.
+* `IO`: The I/O ports.
+* `memory`: The memory.
+* `x_attr`: The attributes dictionary.
+
+For what we need each field, we will see later.
+If we want other types, we can define them here as well.
+The most basic type looks like this:
+
+{% highlight c %}
+typedef struct {
+    PyObject_HEAD
+    PyObject    *x_attr;        /* Attributes dictionary */
+} newTypeObject;
+{% endhighlight %}
+
+The `i8080o_Type` struct is the type definition of the `i8080oObject` struct.
+This is defined in `src/i8080/_i8080_object.c`:
+
+{% highlight c %}
+// src/i8080/_i8080_object.c
+#include "Python.h"
+#include "_i8080_module.h"
+#include "_i8080_object.h"
+#include "_i8080_constants.h"
+...
+
+// https://docs.python.org/3/c-api/typeobj.html
+// not static because it is used in the module init function
+PyTypeObject i8080o_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_i8080.i8080uC",
+    .tp_basicsize = sizeof(i8080oObject),
+    .tp_dealloc = (destructor)i8080o_dealloc,
+    .tp_new = i8080o_new
+};
+{% endhighlight %}
+
+It contains the following fields:
+
+* `.tp_name` is the name of the type and is composed of the module name and the type name.
+* `.tp_basicsize` is the size of the type.
+* `.tp_dealloc` is the function that is called when the object is deallocated.
+* `.tp_new` is the function that is called when a new object is created.
+
+
+`i8080o_dealloc` is defined in `src/i8080/_i8080_object.c`:
+
+{% highlight c %}
+// src/i8080/_i8080_object.c
+...
+// deallocate method
+static void
+i8080o_dealloc(i8080oObject *self)
+{
+    #ifdef DEBUG
+    printf("Deallocating i8080oObject\n");
+    #endif
+    // free the memory
+    if(self->memory != NULL){
+        free(self->memory);
+    }
+
+    Py_XDECREF(self->x_attr);
+
+    PyObject_Free(self);
+}
+...
+{% endhighlight %}
+
+It frees the memory and the attributes dictionary and decrements the reference count of the object.
+
+`i8080o_new` is also defined in `src/i8080/_i8080_object.c`:
+
+{% highlight c %}
+// src/i8080/_i8080_object.c
+...
+static PyObject*
+i8080o_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+	#ifdef DEBUG
+	printf("Creating new i8080 object\n");
+	#endif
+	i8080oObject *self;
+	self = (i8080oObject *)type->tp_alloc(type, 0);
+	if (self != NULL) {
+		self->x_attr = PyLong_FromLong(0);
+		if (self->x_attr == NULL) {
+			Py_DECREF(self);
+			return NULL;
+		}
+	}
+
+	// Set the default values
+    self->memory = malloc(MEMORY_SIZE);
+
+    if (self->memory == NULL){
+        PyErr_SetString(PyExc_MemoryError, "Could not allocate memory\n");
+        return NULL;
+    }
+
+	return (PyObject *)self;
+}
+...
+{% endhighlight %}
+
+It allocates the memory for the object and sets the default values.
+
+The `i8080oObject` type is now defined and we can use it in our module.
+We can already create an object in Python:
+
+{% highlight python %}
+>>> import _i8080
+>>> i8080 = _i8080.i8080uC()
+{% endhighlight %}
+
+But we can't do anything with it yet.
+
+The whole code for this post can be found [here][github_part_2].
+
+In the [next](i8080_part_3) post we will see how to define the methods of the `i8080oObject` type.
+
+[i8080_part_1]: /projects/i8080_part_1/
+[i8080_part_3]: /projects/i8080_part_3/
+[github_part_2]: https://github.com/Shurikal/i8080_blog/tree/part_2
