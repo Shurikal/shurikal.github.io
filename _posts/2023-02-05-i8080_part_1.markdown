@@ -152,6 +152,5 @@ The code for this post can be found [here][github_part_1].
 [github_project]: https://github.com/Shurikal/python_8080/
 [pyproject_toml]: https://peps.python.org/pep-0621/
 [github_part_1]: https://github.com/Shurikal/i8080_blog/tree/part_1
-[github_part_2]: https://github.com/Shurikal/i8080_blog/tree/part_2
 [github_blog]: https://github.com/Shurikal/i8080_blog/
 [blog_part_2]: /projects/i8080_part_2/
