@@ -394,10 +394,19 @@ i8080o_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 It allocates the memory for the object and sets the default values.
 
 The `i8080oObject` type is now defined and we can use it in our module.
+We can already create an object in Python:
+
+{% highlight python %}
+>>> import _i8080
+>>> i8080 = _i8080.i8080uC()
+{% endhighlight %}
+
+But we can't do anything with it yet.
 
 The whole code for this post can be found [here][github_part_2].
 
-In the next post we will see how to define the methods of the `i8080oObject` type.
+In the [next](i8080_part_3) post we will see how to define the methods of the `i8080oObject` type.
 
 [i8080_part_1]: /projects/i8080_part_1/
+[i8080_part_3]: /projects/i8080_part_3/
 [github_part_2]: https://github.com/Shurikal/i8080_blog/tree/part_2
