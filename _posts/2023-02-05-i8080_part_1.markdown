@@ -1,0 +1,157 @@
+---
+layout: post
+title:  "Intel 8080 Emulator Part 1: How to write a C module for Python"
+date:   2023-02-05 11:00:00 +0100
+categories: project
+permalink: /projects/i8080_part_1/
+---
+
+As an ongoing Project, I will be updating this post with new information as I progress.
+
+I started this project to learn how to write C modules for Python.
+It is probably not the best implementation of an 8080 emulator, but it is a fun project for me to learn more about the language.
+
+My current implementation of the emulator is hosted on [GitHub][github_project].
+If you are interested in the different parts, you can find them [here][github_blog].
+Every part is a separate branch, so you can easily switch between them.
+
+
+# How to write a C module for Python
+
+First of all, you need to have a C compiler installed on your system.
+But we don't have to worry about how to use it, because Python will take care of it for us.
+There are different ways to write a C module for Python, but I will be using the `setuptools` package.
+
+
+To get started, we need to create two files called `setup.py` and `pyproject.toml`.
+
+The `setup.py` file tells Python how to build the module and what files to include.
+
+{% highlight python %}
+# setup.py
+from setuptools import Extension, setup
+
+setup(
+    ext_modules=[
+        Extension(
+            name="_i8080",  # as it would be imported
+                            # may include packages/namespaces separated by `.`
+            sources=["src/i8080/_i8080_module.c"], # all sources are compiled into a single binary file
+            include_dirs=["src/i8080"], # include directories
+        ),
+    ]
+)
+{% endhighlight %}
+
+The `pyproject.toml` stores metadata about the project.
+More information about `pyproject.toml` can be found [here][pyproject_toml].
+
+{% highlight toml %}
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intel_8080"
+version = "0.0.1"
+authors = [
+  { name="Chris Ruettimann", email="github@shurikal.ch" },
+]
+description = "A module to emulate the 8080"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C :: 11",
+]
+{% endhighlight %}
+
+
+In the `src/i8080` directory, we will create a file called `_i8080_module.c` and a file called `_i8080_module.h`.
+The `_i8080_module.c` file will contain the implementation of the module, the `_i8080_module.h` doesn't contain much at the moment, except some debug macros.
+    
+{% highlight c %}
+// src/i8080/_i8080_module.c
+#include "Python.h"
+#include "_i8080_module.h"
+
+PyDoc_STRVAR(module_doc,
+"This module is for emulating the Intel 8080 CPU.");
+
+// https://docs.python.org/3/c-api/module.html#c.PyModuleDef
+static struct PyModuleDef i8080module = {
+    PyModuleDef_HEAD_INIT,  //m_base
+    "intel_8080",           //m_name
+    module_doc,             //m_doc
+    0,                      //m_size
+    NULL,                   //m_methods
+    NULL,                   //m_slots
+    NULL,                   //m_traverse
+    NULL,                   //m_clear
+    NULL                    //m_free
+};
+
+/* 
+Export function for the module (*must* be called PyInit_xx) 
+module name is _i8080, from setup.py Extension
+*/
+
+PyMODINIT_FUNC
+PyInit__i8080(void)
+{
+    return PyModuleDef_Init(&i8080module);
+}
+{% endhighlight %}
+
+{% highlight c %}
+// src/i8080/_i8080_module.h
+#pragma once
+
+#define DEBUG
+{% endhighlight %}
+
+As you can see, the `_i8080_module.c` file is pretty empty, it only contains the module definition.
+
+To build the module, we need to run the following command (make sure you are in the root directory of the project)
+
+{% highlight bash %}
+python -m pip install .
+{% endhighlight %}
+
+Maybe the command will fail, because you don't have the `setuptools` package installed.
+If that is the case, you can install it with the following command:
+
+{% highlight bash %}
+pip install setuptools
+{% endhighlight %}
+
+If the command was successful, you should see a new directory called `build` which contains the compiled module.
+
+To test if the module was compiled successfully, you can start a Python interpreter and try to import the module.
+
+{% highlight python %}
+>>> import _i8080
+>>> _i8080.__doc__
+'This module is for emulating the Intel 8080 CPU.'
+{% endhighlight %}
+
+Congratulations, you have successfully written a C module for Python!
+In [part 2][blog_part_2], we will add some functionality to the module.
+
+There is also a folder called `tests` which contains some tests for the module.
+To run the tests, you can use the following command (if `pytest` is installed):
+
+{% highlight bash %}
+pytest
+{% endhighlight %}
+
+
+The code for this post can be found [here][github_part_1].
+
+
+[github_project]: https://github.com/Shurikal/python_8080/
+[pyproject_toml]: https://peps.python.org/pep-0621/
+[github_part_1]: https://github.com/Shurikal/i8080_blog/tree/part_1
+[github_part_2]: https://github.com/Shurikal/i8080_blog/tree/part_2
+[github_blog]: https://github.com/Shurikal/i8080_blog/
+[blog_part_2]: /projects/i8080_part_2/
