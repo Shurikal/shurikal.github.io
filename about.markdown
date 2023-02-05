@@ -4,15 +4,5 @@ title: About
 permalink: /about/
 ---
 
-This is the base Jekyll theme. You can find out more info about customizing your Jekyll theme, as well as basic Jekyll usage documentation at [jekyllrb.com](https://jekyllrb.com/)
-
-You can find the source code for Minima at GitHub:
-[jekyll][jekyll-organization] /
-[minima](https://github.com/jekyll/minima)
-
-You can find the source code for Jekyll at GitHub:
-[jekyll][jekyll-organization] /
-[jekyll](https://github.com/jekyll/jekyll)
-
-
-[jekyll-organization]: https://github.com/jekyll
+As a current Master's candidate in the field of Artificial Intelligence in Medicine, I bring to the table a well-rounded educational background, inclusive of a Bachelor's degree in Systems Engineering. 
+My areas of intrigue and expertise span across the domains of Machine Learning, Programming, and Information Security, fueling my passion for innovation and advancement in technology.
